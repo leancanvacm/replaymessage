@@ -2603,7 +2603,12 @@
             } else if (aiResult.error === 'GEMINI_API_KEY_MISSING') {
               showToast('ยังไม่ได้ใส่ GEMINI_API_KEY ใน Settings');
             } else if (aiResult.error === 'GEMINI_REQUEST_FAILED') {
-              showToast('Gemini ตอบไม่สำเร็จ ระบบจะแสดงข้อมูลที่ค้นพบแทน');
+              showToast(`Gemini API ตอบผิดพลาด${aiResult.status ? ` (${aiResult.status})` : ''} ระบบจะแสดงข้อมูลที่ค้นพบแทน`);
+            } else if (aiResult.error === 'WEBSITE_DATA_UNAVAILABLE') {
+              showToast('ไม่พบเนื้อหาเว็บที่โหลดได้ กรุณาตรวจ BOT_WEBSITE_URLS');
+            } else if (aiResult.error === 'GEMINI_AI_DISABLED') {
+              WEBSITE_AI_ENABLED = false;
+              showToast('Gemini ถูกปิดอยู่ใน Settings');
             }
           } catch (error) {
             console.warn('Gemini website answer unavailable:', error);
