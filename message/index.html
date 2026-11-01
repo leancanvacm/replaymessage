@@ -954,10 +954,17 @@
           } else if (type === 'flex') {
             messages.push(buildQaFlexMessage(qa));
           } else if (type === 'sticker') {
+            let packageId = String(qa.packageId || '11537').replace(/[\s,]/g, '');
+            let stickerId = String(qa.stickerId || '52002734').replace(/[\s,]/g, '');
+            // Compatibility with old sample rows that were initialized as 1/1.
+            if (packageId === '1' && stickerId === '1') {
+              packageId = '11537';
+              stickerId = '52002734';
+            }
             messages.push({
               type: 'sticker',
-              packageId: String(qa.packageId || '11537'),
-              stickerId: String(qa.stickerId || '52002734')
+              packageId,
+              stickerId
             });
           } else if (type === 'image') {
             if (isHttpUrl(qa.image)) {
@@ -2219,10 +2226,14 @@
           const code = error && error.code ? String(error.code) : '';
           const message = error && error.message ? String(error.message) : '';
           const detail = [code, message].filter(Boolean).join(' ') || 'UNKNOWN';
+          console.warn('LIFF sendMessages failed:', { detail, payload, error });
           showToast(`ส่งไม่สำเร็จ: ${detail}`, 5000);
 
           if (code === '403' || /permission|scope|chat_message|granted/i.test(detail)) {
             showBanner('ยังไม่ได้ให้สิทธิ์ chat_message.write — เปิด scope ใน LINE Developers Console และกดยอมรับสิทธิ์ใน LINE');
+          } else if (code === '404' && payload.some(message => message && message.type === 'sticker')) {
+            const sticker = payload.find(message => message && message.type === 'sticker');
+            showBanner(`ส่งสติกเกอร์ไม่สำเร็จ (404) • PackageId ${sticker.packageId} / StickerId ${sticker.stickerId} • ตรวจสอบคู่รหัสในชีต QA`);
           } else if (/context|chat room|UTOU|not.*chat/i.test(detail)) {
             showBanner('ต้องเปิด LIFF จากห้องแชท LINE (แชท 1:1 หรือกลุ่ม) เท่านั้น');
           }
