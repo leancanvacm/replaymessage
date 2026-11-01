@@ -299,6 +299,10 @@
           <span>⚙️</span>
           <span>ตั้งค่าแอดมิน</span>
         </button>
+        <button type="button" data-action="clear-history" class="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] text-rose-600 transition active:bg-rose-50">
+          <span>🗑️</span>
+          <span>ล้างประวัติการสนทนา</span>
+        </button>
         <button type="button" data-action="close" class="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] text-gray-700 transition active:bg-gray-50">
           <span>✕</span>
           <span>ปิดหน้าต่าง</span>
@@ -460,6 +464,11 @@
       <button id="dataLoadRetry" type="button" class="hidden shrink-0 rounded-full bg-white px-2.5 py-1 font-semibold text-emerald-800 ring-1 ring-emerald-200">ลองใหม่</button>
     </div>
 
+    <div class="flex shrink-0 items-center justify-between border-b border-white/20 bg-white/70 px-3 py-1.5">
+      <span class="text-[11px] font-medium text-gray-600">ประวัติการสนทนา</span>
+      <button id="chatToggle" type="button" aria-controls="chat" aria-expanded="true" class="rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#049B46] transition active:bg-emerald-50">ซ่อนประวัติ</button>
+    </div>
+
     <main id="chat" class="chat-bg relative min-h-0 flex-1 overflow-y-auto overscroll-contain py-3"></main>
 
     <div id="chips" class="no-scrollbar flex shrink-0 gap-2 overflow-x-auto border-t border-white/20 bg-white/75 px-3 py-2 backdrop-blur"></div>
@@ -506,6 +515,7 @@
         const meta = document.querySelector('meta[name="liff-data-api"]');
         return meta ? String(meta.content || '').trim() : '';
       })();
+      const CHAT_HISTORY_KEY = `replymessage-chat-history:${BOT_ID || 'default'}`;
 
       const DEFAULT_SHOP = {
         name: '',
@@ -535,6 +545,7 @@
       let lineUserId = '';
       let lineUserPictureUrl = '';
       let lineUserName = '';
+      let conversationHistory = [];
       let composing = false;
       let toastTimer = null;
       let dataLoadTimer = null;
@@ -556,6 +567,7 @@
         els.dataLoadText = document.getElementById('dataLoadText');
         els.dataLoadElapsed = document.getElementById('dataLoadElapsed');
         els.dataLoadRetry = document.getElementById('dataLoadRetry');
+        els.chatToggle = document.getElementById('chatToggle');
         els.chat = document.getElementById('chat');
         els.input = document.getElementById('input');
         els.chips = document.getElementById('chips');
@@ -2180,9 +2192,53 @@
         }
       }
 
-      function appendChatMessage(role, message) {
+      function saveConversationHistory() {
+        try {
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(conversationHistory));
+        } catch (error) {
+          console.warn('Unable to save conversation history on this device:', error);
+          showToast('บันทึกประวัติในเครื่องไม่สำเร็จ พื้นที่จัดเก็บอาจเต็ม', 4000);
+        }
+      }
+
+      function restoreConversationHistory() {
+        try {
+          const saved = localStorage.getItem(CHAT_HISTORY_KEY);
+          const parsed = saved ? JSON.parse(saved) : [];
+          if (!Array.isArray(parsed)) return;
+
+          conversationHistory = parsed.filter(item =>
+            item && (item.role === 'user' || item.role === 'bot') && String(item.text || '').trim()
+          );
+          conversationHistory.forEach(item => appendChatMessage(item.role, item.text, false));
+          if (conversationHistory.length) els.chat.scrollTop = els.chat.scrollHeight;
+        } catch (error) {
+          console.warn('Unable to restore conversation history:', error);
+        }
+      }
+
+      function clearConversationHistory() {
+        if (!window.confirm('ล้างประวัติการสนทนาที่บันทึกไว้ในเครื่องนี้หรือไม่?')) return;
+        conversationHistory = [];
+        try {
+          localStorage.removeItem(CHAT_HISTORY_KEY);
+        } catch (error) {
+          console.warn('Unable to clear saved conversation history:', error);
+        }
+        els.chat.textContent = '';
+        showToast('ล้างประวัติการสนทนาแล้ว');
+      }
+
+      function setChatVisible(visible) {
+        els.chat.classList.toggle('hidden', !visible);
+        els.chatToggle.textContent = visible ? 'ซ่อนประวัติ' : 'แสดงประวัติ';
+        els.chatToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+      }
+
+      function appendChatMessage(role, message, persist = true) {
         const text = String(message == null ? '' : message).trim();
         if (!text || !els.chat) return;
+        setChatVisible(true);
 
         const isUser = role === 'user';
         const row = document.createElement('div');
@@ -2222,6 +2278,11 @@
         }
         els.chat.appendChild(row);
         els.chat.scrollTop = els.chat.scrollHeight;
+
+        if (persist) {
+          conversationHistory.push({ role, text, createdAt: new Date().toISOString() });
+          saveConversationHistory();
+        }
       }
 
       async function submit(value) {
@@ -2253,6 +2314,9 @@
       function bindEvents() {
         els.sendBtn.addEventListener('click', () => submit());
         els.dataLoadRetry.addEventListener('click', () => loadSheetData());
+        els.chatToggle.addEventListener('click', () => {
+          setChatVisible(els.chat.classList.contains('hidden'));
+        });
 
         els.input.addEventListener('input', () => {
           autoResize();
@@ -2293,6 +2357,7 @@
           if (!target) return;
           hideMenu();
           if (target.dataset.action === 'admin') openAdminPanel();
+          if (target.dataset.action === 'clear-history') clearConversationHistory();
           if (target.dataset.action === 'close') closeLiff();
         });
 
@@ -2355,6 +2420,7 @@
       async function boot() {
         cacheElements();
         bindEvents();
+        restoreConversationHistory();
         document.querySelector('[data-action="admin"]').classList.remove('hidden');
         updateShopUi();
         renderQuickQuestions();
