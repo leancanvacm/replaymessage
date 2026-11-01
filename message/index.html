@@ -1541,7 +1541,7 @@
           action: 'websiteAnswer',
           bot: BOT_ID,
           question
-        }), 55000);
+        }), 120000);
         return data && typeof data === 'object' ? data : { ok: false, error: 'INVALID_RESPONSE' };
       }
 
@@ -2596,7 +2596,10 @@
 
         appendChatMessage('user', text);
         let reply = resolveReply(text);
-        if (WEBSITE_AI_ENABLED && SHEET_ROWS.some(record => record && record.sourceType === 'website') && reply.useWebsiteGemini) {
+        // Ask the server to load configured website URLs itself. Requiring
+        // website rows in the initial bootstrap prevents Gemini from running
+        // when the first page scrape is slow or the bootstrap cache is empty.
+        if (WEBSITE_AI_ENABLED && reply.useWebsiteGemini) {
           showToast('กำลังวิเคราะห์ข้อมูลจากเว็บไซต์ด้วย Gemini…', 55000);
           try {
             const aiResult = await requestWebsiteGeminiAnswer(text);
