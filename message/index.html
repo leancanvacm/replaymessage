@@ -694,7 +694,20 @@
         const scored = [];
         SHEET_ROWS.forEach(record => {
           const keywords = Array.isArray(record.keywords) ? record.keywords : (record.row || []);
-          const score = keywords.reduce((best, keyword) => Math.max(best, keywordScore(text, keyword)), 0);
+          let score = keywords.reduce((best, keyword) => Math.max(best, keywordScore(text, keyword)), 0);
+          if (record.sourceType === 'website') {
+            const row = Array.isArray(record.row) ? record.row : [];
+            const heading = String(row[1] || '');
+            const headingScore = keywordScore(text, heading);
+            if (headingScore > 0) score = Math.max(score, 320 + Math.min(headingScore, 100));
+
+            // For website pages, allow a short topic query to match inside a
+            // longer question (for example, "หุ้น PTT มีอะไรบ้าง").
+            const queryTokens = normalize(text).split(/\s+/).filter(token => token.length >= 2);
+            const searchable = compact(row.slice(0, 3).join(' '));
+            const matchedTokens = queryTokens.filter(token => searchable.includes(compact(token)));
+            if (matchedTokens.length) score = Math.max(score, 80 + matchedTokens.length * 35);
+          }
           if (score > 0) scored.push({ record, score });
         });
         if (!scored.length) return [];
