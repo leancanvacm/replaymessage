@@ -1115,7 +1115,16 @@
           if (applied) {
             try { localStorage.setItem(localCacheKey, JSON.stringify(data)); }
             catch (cacheError) { console.warn('Cannot cache bot data:', cacheError); }
-            setDataLoadStatus('ready', 'ข้อมูลล่าสุดพร้อมใช้งาน');
+            const website = data.website && typeof data.website === 'object' ? data.website : null;
+            let statusMessage = 'ข้อมูลล่าสุดพร้อมใช้งาน';
+            if (website && website.configuredCount > 0) {
+              statusMessage += ` • เว็บ ${website.loadedCount || 0}/${website.configuredCount} หน้า, ${website.rowCount || 0} ส่วน`;
+              if (!website.loadedCount) {
+                const reasons = (website.sources || []).map(source => source.error).filter(Boolean);
+                showBanner(`อ่านหน้าเว็บไม่สำเร็จ: ${Array.from(new Set(reasons)).join(', ') || 'ตรวจสอบ URL และสิทธิ์การเข้าถึง'} (เว็บที่ใช้ JavaScript หรือบังคับล็อกอินอ่านไม่ได้)`);
+              }
+            }
+            setDataLoadStatus('ready', statusMessage);
             showToast('โหลดข้อมูลล่าสุดจาก Sheet แล้ว', 1800);
           }
           return applied;
@@ -1336,6 +1345,41 @@
       function buildSheetRowMessage(record) {
         const headers = Array.isArray(record.headers) ? record.headers : [];
         const row = Array.isArray(record.row) ? record.row : [];
+        if (record.sourceType === 'website') {
+          const pageTitle = String(row[0] || record.sheetName || 'ข้อมูลจากเว็บไซต์').trim();
+          const heading = String(row[1] || '').trim();
+          const content = String(row[2] || '').trim();
+          const url = String(row[3] || '').trim();
+          const bodyContents = [
+            { type: 'text', text: pageTitle.slice(0, 160), weight: 'bold', size: 'md', wrap: true },
+            { type: 'separator', margin: 'md' }
+          ];
+          if (heading && heading !== pageTitle) {
+            bodyContents.push({ type: 'text', text: heading.slice(0, 160), weight: 'bold', size: 'sm', wrap: true, margin: 'md' });
+          }
+          if (content) bodyContents.push({ type: 'text', text: content.slice(0, 700), size: 'sm', wrap: true, margin: 'md' });
+
+          const bubble = {
+            type: 'bubble',
+            size: 'kilo',
+            body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: 'lg', contents: bodyContents }
+          };
+          if (isHttpUrl(url)) {
+            bubble.footer = {
+              type: 'box', layout: 'vertical', paddingAll: 'md',
+              contents: [{
+                type: 'button', style: 'link', height: 'sm',
+                action: { type: 'uri', label: 'เปิดหน้าเว็บต้นทาง', uri: url }
+              }]
+            };
+          }
+          return {
+            type: 'flex',
+            altText: `${pageTitle}: ${heading || content}`.slice(0, 400),
+            contents: bubble
+          };
+        }
+
         const imageUrl = String(row[row.length - 1] || '').trim();
         if (!isImageHttpUrl(imageUrl)) {
           const lines = headers.map((header, index) => {
@@ -1439,6 +1483,16 @@
         const sheetRows = findSheetRows(input);
         if (sheetRows.length > 0) {
           const messages = sheetRows.map(buildSheetRowMessage).slice(0, 5);
+          const websiteRecord = sheetRows.find(record => record.sourceType === 'website');
+          if (websiteRecord) {
+            const row = Array.isArray(websiteRecord.row) ? websiteRecord.row : [];
+            const title = String(row[1] || row[0] || 'ข้อมูลจากเว็บไซต์').trim();
+            const content = String(row[2] || '').trim();
+            return {
+              preview: [title, content].filter(Boolean).join('\n'),
+              messages
+            };
+          }
           return {
             preview: previewFromMessages(messages),
             messages
