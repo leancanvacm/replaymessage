@@ -1041,6 +1041,7 @@
         if (!SHOP.name && data.bot) SHOP.name = data.bot.name || data.bot.displayName || '';
 
         updateShopUi();
+        refreshConversationAvatars();
         renderQuickQuestions();
         return true;
       }
@@ -2112,6 +2113,7 @@
             lineUserId = String(profile && profile.userId || '').trim();
             lineUserPictureUrl = String(profile && profile.pictureUrl || '').trim();
             lineUserName = String(profile && profile.displayName || '').trim();
+            refreshConversationAvatars();
           } catch (error) {
             lineUserId = '';
             lineUserPictureUrl = '';
@@ -2210,7 +2212,7 @@
           conversationHistory = parsed.filter(item =>
             item && (item.role === 'user' || item.role === 'bot') && String(item.text || '').trim()
           );
-          conversationHistory.forEach(item => appendChatMessage(item.role, item.text, false));
+          conversationHistory.forEach(item => appendChatMessage(item.role, item.text, false, item));
           if (conversationHistory.length) els.chat.scrollTop = els.chat.scrollHeight;
         } catch (error) {
           console.warn('Unable to restore conversation history:', error);
@@ -2235,7 +2237,50 @@
         els.chatToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
       }
 
-      function appendChatMessage(role, message, persist = true) {
+      function renderChatAvatar(avatar, role, avatarUrl, avatarName) {
+        const isUser = role === 'user';
+        avatar.replaceChildren();
+        avatar.setAttribute('role', 'img');
+        avatar.setAttribute('aria-label', avatarName);
+        avatar.title = avatarName;
+
+        const fallback = document.createElement('span');
+        fallback.textContent = isUser ? '👤' : '🤖';
+        avatar.appendChild(fallback);
+
+        if (!avatarUrl) return;
+        const image = document.createElement('img');
+        image.alt = '';
+        image.src = avatarUrl;
+        image.onload = () => fallback.remove();
+        image.onerror = () => image.remove();
+        avatar.appendChild(image);
+      }
+
+      function refreshConversationAvatars() {
+        if (!els.chat || !conversationHistory.length) return;
+        const avatars = els.chat.querySelectorAll('.chat-avatar');
+        let changed = false;
+
+        conversationHistory.forEach((item, index) => {
+          const isUser = item.role === 'user';
+          const avatarUrl = item.avatarUrl || (isUser ? lineUserPictureUrl : String(BOT.pictureUrl || '').trim());
+          const avatarName = item.avatarName || (isUser ? (lineUserName || 'ผู้ถาม') : (currentBotName() || 'บอท'));
+          if (!item.avatarUrl && avatarUrl) {
+            item.avatarUrl = avatarUrl;
+            changed = true;
+          }
+          if (!item.avatarName && avatarName) {
+            item.avatarName = avatarName;
+            changed = true;
+          }
+          if (avatars[index]) renderChatAvatar(avatars[index], item.role, avatarUrl, avatarName);
+        });
+
+        if (changed) saveConversationHistory();
+      }
+
+      function appendChatMessage(role, message, persist = true, savedProfile = null) {
         const text = String(message == null ? '' : message).trim();
         if (!text || !els.chat) return;
         setChatVisible(true);
@@ -2246,24 +2291,11 @@
 
         const avatar = document.createElement('span');
         avatar.className = 'chat-avatar';
-        avatar.setAttribute('role', 'img');
-        const avatarUrl = isUser ? lineUserPictureUrl : String(BOT.pictureUrl || '').trim();
-        const avatarName = isUser ? (lineUserName || 'ผู้ถาม') : (currentBotName() || 'บอท');
-        avatar.setAttribute('aria-label', avatarName);
-        avatar.title = avatarName;
-
-        const fallback = document.createElement('span');
-        fallback.textContent = isUser ? '👤' : '🤖';
-        avatar.appendChild(fallback);
-
-        if (avatarUrl) {
-          const image = document.createElement('img');
-          image.alt = '';
-          image.src = avatarUrl;
-          image.onload = () => fallback.remove();
-          image.onerror = () => image.remove();
-          avatar.appendChild(image);
-        }
+        const avatarUrl = String(savedProfile && savedProfile.avatarUrl || '') ||
+          (isUser ? lineUserPictureUrl : String(BOT.pictureUrl || '').trim());
+        const avatarName = String(savedProfile && savedProfile.avatarName || '') ||
+          (isUser ? (lineUserName || 'ผู้ถาม') : (currentBotName() || 'บอท'));
+        renderChatAvatar(avatar, role, avatarUrl, avatarName);
 
         const bubble = document.createElement('div');
         bubble.className = `chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-bot'}`;
@@ -2280,7 +2312,7 @@
         els.chat.scrollTop = els.chat.scrollHeight;
 
         if (persist) {
-          conversationHistory.push({ role, text, createdAt: new Date().toISOString() });
+          conversationHistory.push({ role, text, avatarUrl, avatarName, createdAt: new Date().toISOString() });
           saveConversationHistory();
         }
       }
