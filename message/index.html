@@ -827,7 +827,7 @@
         // Apps Script ContentService is most reliable through its JSONP
         // callback path. Trying fetch() first can run the full sheet read and
         // then fail on the cross-origin redirect, forcing a second full read.
-        const data = await fetchJsonp(dataUrl, 20000);
+        const data = await fetchJsonp(dataUrl, 60000);
         if (data && data.ok !== false) return data;
         throw new Error((data && data.error) || 'Invalid API response');
       }
@@ -1541,7 +1541,7 @@
           action: 'websiteAnswer',
           bot: BOT_ID,
           question
-        }), 45000);
+        }), 55000);
         return data && typeof data === 'object' ? data : { ok: false, error: 'INVALID_RESPONSE' };
       }
 
@@ -2592,7 +2592,7 @@
         appendChatMessage('user', text);
         let reply = resolveReply(text);
         if (WEBSITE_AI_ENABLED && SHEET_ROWS.some(record => record && record.sourceType === 'website') && reply.useWebsiteGemini) {
-          showToast('กำลังวิเคราะห์ข้อมูลจากเว็บไซต์ด้วย Gemini…', 45000);
+          showToast('กำลังวิเคราะห์ข้อมูลจากเว็บไซต์ด้วย Gemini…', 55000);
           try {
             const aiResult = await requestWebsiteGeminiAnswer(text);
             if (aiResult.ok && aiResult.found) {
