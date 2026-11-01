@@ -1714,6 +1714,8 @@
         }
         const messages = {
           UNAUTHORIZED: 'รหัสผ่านไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่',
+          SETTING_VERIFY_FAILED: 'บันทึกสถานะ AI ไม่ตรงกับค่าที่อ่านกลับจาก Settings กรุณาตรวจ BOT_SPREADSHEET_ID',
+          BOT_SETTINGS_SYNC_FAILED: 'บันทึกค่า AI บางไฟล์ไม่สำเร็จ ตรวจสิทธิ์และแท็บ Settings ของแต่ละ Spreadsheet',
           INVALID_SHEET_URL: 'ลิงก์ Google Sheet ไม่ถูกต้อง',
           SHEET_NOT_ACCESSIBLE: 'เปิดชีตไม่ได้ กรุณาแชร์ชีตให้บัญชีที่รัน Apps Script',
           SHEET_NOT_FOUND: 'ไม่พบชีตที่ระบุ',
@@ -1940,6 +1942,9 @@
           els.adminUidInput.value = (data.settings && data.settings.firstAdminUid) || '';
           els.adminUidStatus.textContent = '';
           setAdminAiToggle(Boolean(data.settings && data.settings.aiEnabled));
+          if (data.settings && data.settings.aiSyncFailed && els.adminAiStatus) {
+            els.adminAiStatus.textContent = 'ซิงก์ GEMINI_AI_ENABLED ไปยัง Settings ของบอทบางไฟล์ไม่สำเร็จ';
+          }
           showAdminForm();
         } catch (error) {
           showAdminAuth('login', 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่');
@@ -2609,6 +2614,8 @@
             } else if (aiResult.error === 'GEMINI_AI_DISABLED') {
               WEBSITE_AI_ENABLED = false;
               showToast('Gemini ถูกปิดอยู่ใน Settings');
+            } else if (!aiResult.ok) {
+              showToast('ระบบวิเคราะห์เว็บขัดข้อง ระบบจะแสดงคำตอบสำรอง');
             }
           } catch (error) {
             console.warn('Gemini website answer unavailable:', error);
