@@ -2199,7 +2199,7 @@
         });
       }
 
-      async function sendMessagesToLine(messages) {
+      async function sendMessagesToLine(messages, fallbackText) {
         if (!liffReady || typeof liff === 'undefined') {
           showToast('ยังเชื่อมต่อ LINE ไม่สำเร็จ');
           return { ok: false, error: 'LIFF_NOT_READY' };
@@ -2227,6 +2227,24 @@
           const message = error && error.message ? String(error.message) : '';
           const detail = [code, message].filter(Boolean).join(' ') || 'UNKNOWN';
           console.warn('LIFF sendMessages failed:', { detail, payload, error });
+
+          if (/USER_NOT_STICKER_OWNER/i.test(detail) && payload.some(item => item && item.type === 'sticker')) {
+            const fallback = String(fallbackText || '').trim() || 'ขออภัยค่ะ ไม่สามารถส่งสติกเกอร์นี้ได้';
+            try {
+              const textPayload = markLiffTextMessages([textMessage(fallback)]);
+              await liff.sendMessages(textPayload);
+              showToast('บัญชีนี้ไม่มีสิทธิ์ส่งสติกเกอร์ จึงส่งคำตอบเป็นข้อความแทน');
+              return { ok: true, types: 'ข้อความ (แทนสติกเกอร์)', fallback: true };
+            } catch (fallbackError) {
+              console.warn('LIFF text fallback after sticker error failed:', fallbackError);
+              const fallbackCode = fallbackError && fallbackError.code ? String(fallbackError.code) : '';
+              const fallbackMessage = fallbackError && fallbackError.message ? String(fallbackError.message) : '';
+              const fallbackDetail = [fallbackCode, fallbackMessage].filter(Boolean).join(' ') || 'UNKNOWN';
+              showToast(`ส่งคำตอบสำรองไม่สำเร็จ: ${fallbackDetail}`, 5000);
+              return { ok: false, error: fallbackDetail };
+            }
+          }
+
           showToast(`ส่งไม่สำเร็จ: ${detail}`, 5000);
 
           if (code === '403' || /permission|scope|chat_message|granted/i.test(detail)) {
@@ -2421,7 +2439,7 @@
           showToast('แสดงคำตอบตัวอย่างแล้ว เตรียมลิงก์สำหรับมือถือไว้ด้านล่าง');
         } else {
           els.mobileHandoff.classList.add('hidden');
-          const result = await sendMessagesToLine(reply.messages);
+          const result = await sendMessagesToLine(reply.messages, reply.preview);
           if (!result.ok) showToast(`ส่งไม่สำเร็จ (${result.error})`);
         }
 
